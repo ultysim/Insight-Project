@@ -47,12 +47,6 @@ class Policy(nn.Module):
                     action = int(c.sample().cpu().numpy()[0])
                     action_prob = float(c.probs[0, action].detach().cpu().numpy())
                 return action, action_prob
-        '''
-        # policy gradient (REINFORCE)
-        logits = self.layers(d_obs)
-        loss = F.cross_entropy(logits, action, reduction='none') * advantage
-        return loss.mean()
-        '''
 
         # PPO
         vs = np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])

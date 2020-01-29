@@ -16,7 +16,7 @@ policy.eval()
 for episode in range(1):
     prev_obs = None
     obs = env.reset()
-    for t in range(500):
+    for t in range(2000):
         env.render()
 
         d_obs = policy.pre_process(obs, prev_obs)

@@ -71,9 +71,19 @@ criterion = nn.BCEWithLogitsLoss()
 #Define the optimizer
 optimizer = torch.optim.Adam(policy.parameters(), lr=0.0001)#0.0001 stable
 
+
+def get_player_col(obs):
+    return obs.cpu().numpy().reshape(75, 80)[:, 70:72]
+
+
+def get_opponent_col(obs):
+    return obs.cpu().numpy().reshape(75, 80)[:, 8:10]
+
+
 def get_opponent_screen(obs):
     numpy_obs = np.fliplr(obs.cpu().numpy().reshape(75, 80))
     return torch.from_numpy(numpy_obs.astype(np.float32).ravel()).unsqueeze(0)
+
 
 def get_opponent_action(x, prev_x):
     """Input: x, current screen; prev_x: previous screen
@@ -92,40 +102,78 @@ def get_opponent_action(x, prev_x):
         return 1
 
 
+def get_opponent_action_2(obs):
+    """Input: x, current screen; prev_x: previous screen
+    Output: Returns opponent action. -1 for no action, 0 for up, 1 for down"""
+    unstack = obs.view(2, 75, 80)
+    obs = unstack[0] - unstack[1]
+    opponent = get_opponent_col(obs)
+    #Remove 0s and see the action
+    opponent = opponent[opponent != 0]
+    if len(opponent) == 0:
+        return -1
+    if opponent[0] > 0:
+        return 0
+    elif opponent[0] < 0:
+        return 1
+    return -2
+
+
+def is_overlap(I):
+    player = get_player_col(I)
+    opponent = get_opponent_col(I)
+    return np.sum(opponent[player == 1.]) >= 8
+
 env = gym.make('PongNoFrameskip-v4')
 env.reset()
 env.render()
 policy.train()
 
 
-for episode in range(4):
+for episode in range(5):
     prev_obs = None
-    op_action_pred = -1
+    obs = env.reset()
+
+    op_obs = policy.pre_process(obs, prev_obs, opponent=True)
+
+    op_action_pred, op_action_prob, op_action_logit = policy(op_obs)
+
+    '''op_action_pred = -1
     op_action_prob = 0
-    op_action_logit = 0
+    op_action_logit = 0'''
 
     correct_hold = []
     op_action_hold = []
     op_action_prob_hold = []
     op_action_logit_hold = torch.Tensor()
-    obs = env.reset()
 
+    overlap_hold = []
+    det = True
 
     for t in range(1000):
         env.render()
 
-        d_obs = policy.pre_process(obs, prev_obs)
+        #Preprocess the images for more model and efficient state extraction:
+        a_obs = policy.pre_process(obs, prev_obs)
         op_obs = policy.pre_process(obs, prev_obs, opponent=True)
+
+
         op_action_real = get_opponent_action(obs, prev_obs)
-        if op_action_real != -1:
+        #op_action_real = get_opponent_action_2(op_obs)
+
+        if op_action_real >= 0:
             op_action_hold.append(torch.tensor(op_action_real))
             op_action_prob_hold.append(op_action_prob)
             op_action_logit_hold = torch.cat((op_action_logit_hold,op_action_logit))
             correct_hold.append(op_action_real == op_action_pred)
 
 
-        action, action_prob, _ = policy(d_obs)
-        op_action_pred, op_action_prob, op_action_logit = policy(op_obs)
+        action, action_prob, _ = policy(a_obs, deterministic = det)
+        op_action_pred, op_action_prob, op_action_logit = policy(op_obs, deterministic = det)
+
+        # TODO: Fix this jank, but just for testing now:
+        filtered_obs = policy.state_to_tensor(obs)
+        overlap_hold.append(is_overlap(filtered_obs))
 
         prev_obs = obs
         obs, reward, done, info = env.step(policy.convert_action(action))
@@ -151,5 +199,8 @@ for episode in range(4):
         # time.sleep(0.033)
     print("{}% correct guesses".format(np.mean(correct_hold)))
     print("{} Cross Entropy Loss".format(loss.item()))
+    print("{}% overlap".format(np.mean(overlap_hold)))
 env.close()
 torch.save(policy.state_dict(), 'BCloneparams.ckpt')
+#plt.plot(op_action_hold)
+#plt.show()
