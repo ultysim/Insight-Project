@@ -91,26 +91,18 @@ def is_overlap(I):
 
 env = gym.make('PongNoFrameskip-v4')
 env.reset()
-#env.render()
 
-for episode in range(10):
+for episode in range(1):
     prev_obs = None
     obs = env.reset()
 
     e_obs, op_obs = imitation_policy.pre_process(obs, prev_obs)
-    plt.imshow(e_obs.view(2, 75, 80)[0])
-    plt.show()
-    plt.imshow(e_obs.view(2, 75, 80)[1])
-    plt.show()
-    plt.imshow(op_obs.view(2, 75, 80)[0])
-    plt.title('Flipped')
-    plt.show()
 
     op_action_pred, op_action_prob, op_action_logit = imitation_policy(op_obs)
 
     correct_hold = []
     op_action_hold = []
-    op_action_logit_hold = []
+    op_action_logit_hold = torch.Tensor()
 
     overlap_hold = []
     det = True
@@ -118,9 +110,7 @@ for episode in range(10):
     # Monitor score for mixture model
     score = 0
 
-    for t in range(1):
-        #env.render()
-
+    for t in range(100):
         #Preprocess the images for more model and efficient state extraction:
         #e_obs = expert_policy.pre_process(obs, prev_obs)
         e_obs, op_obs = imitation_policy.pre_process(obs, prev_obs)
@@ -131,7 +121,7 @@ for episode in range(10):
 
         if op_action_real >= 0:
             op_action_hold.append(torch.tensor(op_action_real))
-            op_action_logit_hold.append(op_action_logit)
+            op_action_logit_hold = torch.cat((op_action_logit_hold, op_action_logit))
             correct_hold.append(op_action_real == op_action_pred)
 
         #Generate mixture:
@@ -151,10 +141,6 @@ for episode in range(10):
 
         op_action_pred, op_action_prob, op_action_logit = imitation_policy(op_obs, deterministic = det)
 
-        """# TODO: Fix this jank, but just for testing now:
-        filtered_obs = policy.state_to_tensor(obs)
-        overlap_hold.append(is_overlap(filtered_obs))"""
-
         prev_obs = obs
         obs, reward, done, info = env.step(action)
         score += reward
@@ -165,6 +151,7 @@ for episode in range(10):
 
 
     actions_stack = torch.stack(op_action_hold)
+    print(op_action_logit_hold)
     for _ in range(10):
         n_batch = 100
         idxs = random.sample(range(len(actions_stack)), n_batch)
