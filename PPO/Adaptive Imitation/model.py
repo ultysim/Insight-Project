@@ -18,11 +18,12 @@ class Policy(nn.Module):
         )
     
     def state_to_tensor(self, I):
-        """ prepro 210x160x3 uint8 frame into 6000 (75x80) 1D float vector """
+        """ prepro 210x160x3 uint8 frame into 6000 (75x80) 1D float vector
+        Inspired by Karpathy original 2016 PG blog post"""
         if I is None:
             return torch.zeros(1, 6000)
         I = I[35:185] # crop - remove 35px from start & 25px from end of image in x, to reduce redundant parts of image (i.e. after ball passes paddle)
-        I = I[::2,::2,0] # downsample by factor of 2.
+        I = I[::2, ::2, 0] # downsample by factor of 2.
         I[I == 144] = 0 # erase background (background type 1)
         I[I == 109] = 0 # erase background (background type 2)
         I[I != 0] = 1 # everything else (paddles, ball) just set to 1. this makes the image grayscale effectively
@@ -48,12 +49,18 @@ class Policy(nn.Module):
                     action_prob = float(c.probs[0, action].detach().cpu().numpy())
                 return action, action_prob
 
-        # PPO
+        #Shape the action for the softmax:
         vs = np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
         ts = torch.FloatTensor(vs[action.cpu().numpy()])
-        
+
+        # Compute logits here so that weights get updated
+        # Tensors are annoying to index and batch, so this allows the action batches in training to work
         logits = self.layers(d_obs)
+
+        # PPO ratio of probabilities, stabilizes training over traditional PG
         r = torch.sum(F.softmax(logits, dim=1) * ts, dim=1) / action_prob
+
+        # Compute the two losses from PPO paper:
         loss1 = r * advantage
         loss2 = torch.clamp(r, 1-self.eps_clip, 1+self.eps_clip) * advantage
         loss = -torch.min(loss1, loss2)

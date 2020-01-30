@@ -23,6 +23,7 @@ def one_hot_embedding(labels, num_classes):
     return y[labels]
 
 #Initialize both agents
+
 expert_policy = Policy()
 expert_policy.load_state_dict(torch.load("3params.ckpt"))
 expert_policy.eval()
@@ -31,7 +32,7 @@ imitation_policy = Imitation()
 imitation_policy.train()
 
 #Define loss criterion
-criterion = nn.BCEWithLogitsLoss()
+criterion = nn.CrossEntropyLoss()
 #Define the optimizer
 optimizer = torch.optim.Adam(imitation_policy.parameters(), lr=0.001)#0.0001 stable
 
@@ -66,8 +67,8 @@ def get_opponent_action(x, prev_x):
         return 2
     return -1
 
-
-def get_opponent_action_2(obs):
+# TODO either clean this up or dump it:
+'''def get_opponent_action_2(obs):
     """Input: x, current screen; prev_x: previous screen
     Output: Returns opponent action. -2 if confused, 0 for up, 1 for down"""
     unstack = obs.view(2, 75, 80)
@@ -81,16 +82,22 @@ def get_opponent_action_2(obs):
         return 1
     elif opponent[0] < 0:
         return 2
-    return -1
-
-
-def is_overlap(I):
-    player = get_player_col(I)
-    opponent = get_opponent_col(I)
-    return np.sum(opponent[player == 1.]) >= 8
+    return -1'''
 
 env = gym.make('PongNoFrameskip-v4')
 env.reset()
+
+
+####################################
+########## Metrics #################
+####################################
+timestep_hold = []
+score_hold = []
+prob_hold = []
+crossloss_hold = []
+
+
+
 
 for episode in range(1):
     prev_obs = None
@@ -110,12 +117,10 @@ for episode in range(1):
     # Monitor score for mixture model
     score = 0
 
-    for t in range(100):
+    for t in range(200):
         #Preprocess the images for more model and efficient state extraction:
         #e_obs = expert_policy.pre_process(obs, prev_obs)
         e_obs, op_obs = imitation_policy.pre_process(obs, prev_obs)
-
-
 
         op_action_real = get_opponent_action(obs, prev_obs)
 
@@ -146,31 +151,32 @@ for episode in range(1):
         score += reward
 
         if done:
-            print('Episode %d (%d timesteps) - Reward: %.2f' % (episode, t, reward))
+            print('Episode %d (%d timesteps) - Reward: %.2f' % (episode, t, score))
+            timestep_hold.append(t)
+            score_hold.append(score)
             break
 
-
+    # Train on entire game. With adaptation games run roughly 25K steps. Entire training data fits on edge devices
     actions_stack = torch.stack(op_action_hold)
-    print(op_action_logit_hold)
-    for _ in range(10):
-        n_batch = 100
-        idxs = random.sample(range(len(actions_stack)), n_batch)
-        action_batch = torch.LongTensor([actions_stack[idx] for idx in idxs])
-        action_batch = one_hot_embedding(action_batch, 3)
-        action_prob_batch = torch.FloatTensor([op_action_logit_hold[idx] for idx in idxs])
-        #op_action_logit_hold, actions_stack = op_action_logit_hold, actions_stack
-        # Clear the previous gradients
-        optimizer.zero_grad()
 
-        loss = criterion(op_action_logit_hold, actions_stack)
-        # Compute gradients
-        loss.backward()
-        # Adjust weights
-        optimizer.step()
+    # Clear the previous gradients
+    optimizer.zero_grad()
+    loss = criterion(op_action_logit_hold, actions_stack)
+    # Compute gradients
+    loss.backward()
+    # Adjust weights
+    optimizer.step()
 
     print("{}% correct guesses".format(np.mean(correct_hold)))
     print("{} Cross Entropy Loss".format(loss.item()))
+    prob_hold.append(np.mean(correct_hold))
+    crossloss_hold.append(loss.item())
 env.close()
-torch.save(imitation_policy.state_dict(), 'BCloneparams.ckpt')
+np.save()
+#torch.save(imitation_policy.state_dict(), 'BCloneparams.ckpt')
 #plt.plot(op_action_hold)
 #plt.show()
+np.save('ScoreHold',score_hold)
+np.save('TimestepHold', timestep_hold)
+np.save('ProbHold', prob_hold)
+np.save('CrosslossHold',crossloss_hold)

@@ -4,12 +4,19 @@ import random
 import torch
 from torch import nn
 from model import Policy
+import os.path
 
 env = gym.make('PongNoFrameskip-v4')
 env.reset()
 
 policy = Policy()
-policy.load_state_dict(torch.load("3params.ckpt"))
+
+if os.path.isfile('3params.ckpt'):
+    print("Loading model weights.")
+    policy.load_state_dict(torch.load("3params.ckpt"))
+else:
+    print("Could not find model weights. Training from scratch.")
+
 
 opt = torch.optim.Adam(policy.parameters(), lr=1e-3)
 
@@ -37,24 +44,24 @@ for it in range(100000):
                 reward_sum = sum(reward_history[-t:])
                 reward_sum_running_avg = 0.99*reward_sum_running_avg + 0.01*reward_sum if reward_sum_running_avg else reward_sum
                 print('Iteration %d, Episode %d (%d timesteps) - last_action: %d, last_action_prob: %.2f, reward_sum: %.2f, running_avg: %.2f' % (it, ep, t, action, action_prob, reward_sum, reward_sum_running_avg))
-                #print(action_history[-5:])
                 break
     
-    # compute advantage
+    # Compute advantage:
     R = 0
     discounted_rewards = []
 
+    # Work backwards to discount the reward:
     for r in reward_history[::-1]:
         if r != 0: R = 0 # scored/lost a point in pong, so reset reward sum
         R = r + policy.gamma * R
         discounted_rewards.insert(0, R)
 
-    #print(discounted_rewards[:5])
+    # Normalize the discounted rewards:
 
     discounted_rewards = torch.FloatTensor(discounted_rewards)
     discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / discounted_rewards.std()
     
-    # update policy
+    # Batch update policy:
     for _ in range(5):
         n_batch = 24576
         idxs = random.sample(range(len(action_history)), n_batch)
@@ -62,7 +69,6 @@ for it in range(100000):
         action_batch = torch.LongTensor([action_history[idx] for idx in idxs])
         action_prob_batch = torch.FloatTensor([action_prob_history[idx] for idx in idxs])
         advantage_batch = torch.FloatTensor([discounted_rewards[idx] for idx in idxs])
-        #advantage_batch = (advantage_batch - advantage_batch.mean()) / advantage_batch.std()
               
         opt.zero_grad()
         loss = policy(d_obs_batch, action_batch, action_prob_batch, advantage_batch)
