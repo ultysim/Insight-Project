@@ -61,22 +61,6 @@ def get_opponent_action(x, prev_x):
         return 2
     return -1
 
-# TODO either clean this up or dump it:
-'''def get_opponent_action_2(obs):
-    """Input: x, current screen; prev_x: previous screen
-    Output: Returns opponent action. -2 if confused, 0 for up, 1 for down"""
-    unstack = obs.view(2, 75, 80)
-    obs = unstack[0] - unstack[1]
-    opponent = get_opponent_col(obs)
-    #Remove 0s and see the action
-    opponent = opponent[opponent != 0]
-    if len(opponent) == 0:
-        return 0
-    if opponent[0] > 0:
-        return 1
-    elif opponent[0] < 0:
-        return 2
-    return -1'''
 
 env = gym.make('PongNoFrameskip-v4')
 env.reset()

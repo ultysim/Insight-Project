@@ -6,24 +6,24 @@ from torch import nn
 from matplotlib import pyplot as plt
 from model import Policy
 from Imitation_Model import Imitation
+from datetime import datetime
+import os
+from utils import *
 
 MIXTURE_WEIGHT = 0.1
+BATCH_SIZE = 10000
+N_BATCHES = 5
 
-def one_hot_embedding(labels, num_classes):
-    """Embedding labels to one-hot form.
+time = datetime.now().strftime('%m-%d-%H-%M')
+output_dir = time+'_'+str(MIXTURE_WEIGHT)
 
-    Args:
-      labels: (LongTensor) class labels, sized [N,].
-      num_classes: (int) number of classes.
-
-    Returns:
-      (tensor) encoded labels, sized [N, #classes].
-    """
-    y = torch.eye(num_classes)
-    return y[labels]
+if not os.path.exists(output_dir):
+    os.mkdir(output_dir)
+    print("Directory ", output_dir,  " Created ")
+else:
+    print("Directory ", output_dir,  " already exists")
 
 #Initialize both agents
-
 expert_policy = Policy()
 expert_policy.load_state_dict(torch.load("3params.ckpt"))
 expert_policy.eval()
@@ -36,58 +36,7 @@ criterion = nn.CrossEntropyLoss()
 #Define the optimizer
 optimizer = torch.optim.Adam(imitation_policy.parameters(), lr=0.001)#0.0001 stable
 
-
-def get_player_col(obs):
-    return obs.cpu().numpy().reshape(75, 80)[:, 70:72]
-
-
-def get_opponent_col(obs):
-    return obs.cpu().numpy().reshape(75, 80)[:, 8:10]
-
-
-def get_opponent_screen(obs):
-    numpy_obs = np.fliplr(obs.cpu().numpy().reshape(75, 80))
-    return torch.from_numpy(numpy_obs.astype(np.float32).ravel()).unsqueeze(0)
-
-
-def get_opponent_action(x, prev_x):
-    """Input: x, current screen; prev_x: previous screen
-    Output: Returns opponent action. 0 for no action, 1 for up, 2 for down, -1 return for stability"""
-    if prev_x is None:
-        prev_x = x
-    movement = x - prev_x
-    op_window = movement[35:194, 16:20]
-    #Remove 0s and see the action
-    op_window = op_window[op_window != 0]
-    if len(op_window) == 0:
-        return 0
-    if op_window[0] < 100:
-        return 1
-    elif op_window[0] >= 100:
-        return 2
-    return -1
-
-# TODO either clean this up or dump it:
-'''def get_opponent_action_2(obs):
-    """Input: x, current screen; prev_x: previous screen
-    Output: Returns opponent action. -2 if confused, 0 for up, 1 for down"""
-    unstack = obs.view(2, 75, 80)
-    obs = unstack[0] - unstack[1]
-    opponent = get_opponent_col(obs)
-    #Remove 0s and see the action
-    opponent = opponent[opponent != 0]
-    if len(opponent) == 0:
-        return 0
-    if opponent[0] > 0:
-        return 1
-    elif opponent[0] < 0:
-        return 2
-    return -1'''
-
 env = gym.make('PongNoFrameskip-v4')
-env.reset()
-
-
 ####################################
 ########## Metrics #################
 ####################################
@@ -96,10 +45,8 @@ score_hold = []
 prob_hold = []
 crossloss_hold = []
 
-
-
-
-for episode in range(1):
+#TODO Make this a cmd line arg
+for episode in range(30):
     prev_obs = None
     obs = env.reset()
 
@@ -109,25 +56,21 @@ for episode in range(1):
 
     correct_hold = []
     op_action_hold = []
-    op_action_logit_hold = torch.Tensor()
-
-    overlap_hold = []
-    det = True
+    op_obs_hold = []
 
     # Monitor score for mixture model
     score = 0
-
-    for t in range(200):
+    #TODO Make this a cmd line arg
+    for t in range(30000):
         #Preprocess the images for more model and efficient state extraction:
-        #e_obs = expert_policy.pre_process(obs, prev_obs)
         e_obs, op_obs = imitation_policy.pre_process(obs, prev_obs)
 
         op_action_real = get_opponent_action(obs, prev_obs)
 
         if op_action_real >= 0:
             op_action_hold.append(torch.tensor(op_action_real))
-            op_action_logit_hold = torch.cat((op_action_logit_hold, op_action_logit))
             correct_hold.append(op_action_real == op_action_pred)
+            op_obs_hold.append(op_obs)
 
         #Generate mixture:
         expert_logits = expert_policy.layers(e_obs)
@@ -144,7 +87,7 @@ for episode in range(1):
 
         action = torch.distributions.Categorical(probs=prob_mixture).sample() + 1
 
-        op_action_pred, op_action_prob, op_action_logit = imitation_policy(op_obs, deterministic = det)
+        op_action_pred, op_action_prob, op_action_logit = imitation_policy(op_obs, deterministic=True)
 
         prev_obs = obs
         obs, reward, done, info = env.step(action)
@@ -156,27 +99,35 @@ for episode in range(1):
             score_hold.append(score)
             break
 
-    # Train on entire game. With adaptation games run roughly 25K steps. Entire training data fits on edge devices
-    actions_stack = torch.stack(op_action_hold)
+    batch_loss = []
+    for b in range(N_BATCHES):
+        print('Train batch {}/{}'.format(b, N_BATCHES))
+        idxs = random.sample(range(len(op_action_hold)), BATCH_SIZE)
+        action_batch = torch.stack([op_action_hold[idx] for idx in idxs])
+        #actions_stack = torch.stack(op_action_hold)
+        obs_batch = torch.cat([op_obs_hold[idx] for idx in idxs])
+        #temp = torch.cat(op_obs_hold, 0)
+        op_action_logit_hold = imitation_policy.layers(obs_batch)
 
-    # Clear the previous gradients
-    optimizer.zero_grad()
-    loss = criterion(op_action_logit_hold, actions_stack)
-    # Compute gradients
-    loss.backward()
-    # Adjust weights
-    optimizer.step()
+        # Clear the previous gradients
+        optimizer.zero_grad()
+        loss = criterion(op_action_logit_hold, action_batch)
+        # Compute gradients
+        loss.backward()
+        # Adjust weights
+        optimizer.step()
+        batch_loss.append(loss.item())
 
+    run_loss = np.mean(batch_loss)
     print("{}% correct guesses".format(np.mean(correct_hold)))
-    print("{} Cross Entropy Loss".format(loss.item()))
+    print("{} Cross Entropy Loss".format(run_loss))
     prob_hold.append(np.mean(correct_hold))
-    crossloss_hold.append(loss.item())
+    crossloss_hold.append(run_loss)
 env.close()
-np.save()
 #torch.save(imitation_policy.state_dict(), 'BCloneparams.ckpt')
 #plt.plot(op_action_hold)
 #plt.show()
-np.save('ScoreHold',score_hold)
-np.save('TimestepHold', timestep_hold)
-np.save('ProbHold', prob_hold)
-np.save('CrosslossHold',crossloss_hold)
+np.save(output_dir+'/ScoreHold',score_hold)
+np.save(output_dir+'/TimestepHold', timestep_hold)
+np.save(output_dir+'/ProbHold', prob_hold)
+np.save(output_dir+'/CrosslossHold', crossloss_hold)
