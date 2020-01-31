@@ -11,8 +11,9 @@ import os
 from utils import *
 import sys
 
-assert len(sys.argv) == 2, "Please specify mixture weight"
+assert len(sys.argv) == 3, "Please specify mixture weight and handicap"
 MIXTURE_WEIGHT = float(sys.argv[1])
+HANDICAP = int(sys.argv[2])
 BATCH_SIZE = 7500
 N_BATCHES = 10
 
@@ -89,8 +90,8 @@ for episode in range(30):
 
         #Look at score delta:
         scale = 0
-        if score > 0:
-            scale = score * MIXTURE_WEIGHT
+        if score + HANDICAP > 0:
+            scale = (score + HANDICAP) * MIXTURE_WEIGHT
 
         prob_mixture = (1-scale)*expert_probs + scale*imitation_probs
 
