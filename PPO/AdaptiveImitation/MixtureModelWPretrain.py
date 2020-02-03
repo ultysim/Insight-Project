@@ -5,16 +5,20 @@ import random
 from torch import nn
 from matplotlib import pyplot as plt
 from model import Policy
+from Imitation_Model import Imitation
 from datetime import datetime
 import os
 from utils import *
 import sys
 
+assert len(sys.argv) == 3, "Please specify mixture weight and handicap"
+MIXTURE_WEIGHT = float(sys.argv[1])
+HANDICAP = int(sys.argv[2])
 BATCH_SIZE = 7500
 N_BATCHES = 10
 
 time = datetime.now().strftime('%m-%d-%H-%M')
-output_dir = time+'_'+str('TransferExperiment')
+output_dir = time+'_'+str(MIXTURE_WEIGHT)+'Transfer'
 
 if not os.path.exists(output_dir):
     os.mkdir(output_dir)
@@ -23,18 +27,22 @@ else:
     print("Directory ", output_dir,  " already exists")
 
 #Initialize both agents
-policy = Policy()
-policy.load_state_dict(torch.load("3params.ckpt"))
-policy.train()
+expert_policy = Policy()
+expert_policy.load_state_dict(torch.load("3params.ckpt"))
+expert_policy.eval()
+
+imitation_policy = Imitation()
+imitation_policy.load_state_dict(torch.load("3params.ckpt"))
+imitation_policy.train()
 
 #Freeze the input layer, only tune the last layer:
-policy.layers[0].weight.requires_grad = False
-policy.layers[0].bias.requires_grad = False
+imitation_policy.layers[0].weight.requires_grad = False
+imitation_policy.layers[0].bias.requires_grad = False
 
 #Define loss criterion
 criterion = nn.CrossEntropyLoss()
 #Define the optimizer
-optimizer = torch.optim.Adam(policy.layers[2].parameters(), lr=0.0001)
+optimizer = torch.optim.Adam(imitation_policy.layers[2].parameters(), lr=0.001)#0.0001 stable
 
 env = gym.make('PongNoFrameskip-v4')
 ####################################
@@ -46,16 +54,14 @@ prob_hold = []
 crossloss_hold = []
 
 #TODO Make this a cmd line arg
-for episode in range(15):
+for episode in range(30):
+    prev_obs = None
+    op_prev_obs = None
     obs = env.reset()
 
-    prev_obs = np.zeros(shape=obs.shape)
-    op_prev_obs = np.zeros(shape=obs.shape)
+    e_obs, op_obs = imitation_policy.pre_process(obs, prev_obs)
 
-
-    op_obs = policy.pre_process(np.fliplr(obs), np.fliplr(prev_obs))
-
-    op_action_pred, op_action_prob = policy(op_obs)
+    op_action_pred, op_action_prob, op_action_logit = imitation_policy(op_obs)
 
     correct_hold = []
     op_action_hold = []
@@ -67,22 +73,34 @@ for episode in range(15):
     #TODO Make this a cmd line arg
     for t in range(30000):
         #Preprocess the images for more model and efficient state extraction:
-        e_obs = policy.pre_process(obs, prev_obs)
+        e_obs, _ = imitation_policy.pre_process(obs, prev_obs)
         if op_state_flag:
             op_state_flag = False
-            op_obs = policy.pre_process(np.fliplr(obs), np.fliplr(prev_obs))
+            _, op_obs = imitation_policy.pre_process(obs, op_prev_obs)
             op_action_real = get_opponent_action(obs, op_prev_obs)
             if op_action_real >= 0:
                 op_action_hold.append(torch.tensor(op_action_real))
                 correct_hold.append(op_action_real == op_action_pred)
                 op_obs_hold.append(op_obs)
-            op_action_pred, op_action_prob = policy(op_obs, deterministic=True)
+            op_action_pred, op_action_prob, op_action_logit = imitation_policy(op_obs, deterministic=True)
             op_prev_obs = obs
         else:
             op_state_flag = True
 
-        action, action_prob = policy(e_obs, deterministic=False)
-        action = policy.convert_action(action)
+        #Generate mixture:
+        expert_logits = expert_policy.layers(e_obs)
+        expert_probs = nn.Softmax(dim=0)(expert_logits.view(-1))
+        imitation_logits = imitation_policy.layers(e_obs)
+        imitation_probs = nn.Softmax(dim=0)(imitation_logits.view(-1))
+
+        #Look at score delta:
+        scale = 0
+        if score + HANDICAP > 0:
+            scale = (score + HANDICAP) * MIXTURE_WEIGHT
+
+        prob_mixture = (1-scale)*expert_probs + scale*imitation_probs
+
+        action = torch.distributions.Categorical(probs=prob_mixture).sample() + 1
 
         prev_obs = obs
         obs, reward, done, info = env.step(action)
@@ -97,14 +115,12 @@ for episode in range(15):
     batch_loss = []
     for b in range(N_BATCHES):
         print('Train batch {}/{}'.format(b, N_BATCHES))
-        if BATCH_SIZE > len(op_action_hold):
-            BATCH_SIZE = int(0.5*len(op_action_hold))
         idxs = random.sample(range(len(op_action_hold)), BATCH_SIZE)
         action_batch = torch.stack([op_action_hold[idx] for idx in idxs])
         #actions_stack = torch.stack(op_action_hold)
         obs_batch = torch.cat([op_obs_hold[idx] for idx in idxs])
         #temp = torch.cat(op_obs_hold, 0)
-        op_action_logit_hold = policy.layers(obs_batch)
+        op_action_logit_hold = imitation_policy.layers(obs_batch)
 
         # Clear the previous gradients
         optimizer.zero_grad()
