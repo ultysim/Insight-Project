@@ -13,8 +13,13 @@ I choose Atari Pong as the environment for this experiment as it is the only two
 ![Expert Pong Agent](https://github.com/ultysim/Insight-Project/blob/master/ExpertInAction.gif)
 
 The idea of this project is to take a use a mixture model comprised of an expert agent and a actively learning imitation agent. The mixture ratio is a function of the positive score differential between the algorithm agent and the opponent, as the agent is ahead by more points, more of the imitation is mixed in. 
-Mixing ratio:![Mixing Ratio:](https://github.com/ultysim/Insight-Project/blob/master/mixtureparam.png)
+
+Mixing ratio:
+
+![Mixing Ratio:](https://github.com/ultysim/Insight-Project/blob/master/mixtureparam.png)
+
 Mixture model:
+
 ![Mixture Model](https://github.com/ultysim/Insight-Project/blob/master/mixturemodel.png)
 
 # Results:
