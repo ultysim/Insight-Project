@@ -10,6 +10,7 @@ Competitive games are best when the players are evenly matched in skill. The exp
 It has been empirically proven that reinforcement learning algorithms can generalize and play any video game at a super human level. Deepmind was the first with a deep Q-network applied to a suite of Atari games, more recently Google Deepmind with AlphaStar and Open Ai with Open Five. But these algorithms are trained to win and have little use for the average player.
 
 I choose Atari Pong as the environment for this experiment as it is the only two player game in the Open Ai gym suite. An example of the expert agent in action:
+
 ![Expert Pong Agent](https://github.com/ultysim/Insight-Project/blob/master/ExpertInAction.gif)
 
 The idea of this project is to take a use a mixture model comprised of an expert agent and a actively learning imitation agent. The mixture ratio is a function of the positive score differential between the algorithm agent and the opponent, as the agent is ahead by more points, more of the imitation is mixed in. 
