@@ -29,3 +29,6 @@ Game length increased by over 30% with the mixture model approach over baseline 
 
 Results from various experiments can be analyzed with the Generate() function from generate_metrics.py. Data directory has associated plots and raw data. The naming convention is: EXPERIMENT_NAME + MIXTURE_RATIO, if handicap was used H# where # is the value of the handicap, if learning rate was adjusted LR# where # is the value of the learning rate.
 
+Video example of the mixture model agent playing in real time:
+
+https://www.youtube.com/watch?v=ORqwuvWxQUI
