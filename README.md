@@ -25,6 +25,8 @@ Mixture model:
 
 # Results:
 
+See Implementation Example.ipynb for a complete step by step walk through of the experimental pipeline.
+
 Game length increased by over 30% with the mixture model approach over baseline stand alone expert policy. The games were also more competitive. Base line expert policy wins with a score differential of +15, mixture model with no handicap wins with a differential of +1.8, and with a handicap can lose on average with a score differential of -0.5.
 
 Results from various experiments can be analyzed with the Generate() function from generate_metrics.py. Data directory has associated plots and raw data. The naming convention is: EXPERIMENT_NAME + MIXTURE_RATIO, if handicap was used H# where # is the value of the handicap, if learning rate was adjusted LR# where # is the value of the learning rate.
