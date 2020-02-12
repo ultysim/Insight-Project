@@ -17,11 +17,11 @@ The idea of this project is to use a mixture model comprised of an expert agent 
 
 Mixing ratio:
 
-![Mixing Ratio:](https://github.com/ultysim/Insight-Project/blob/master/media/mixtureparam.png)
+![Mixing Ratio:](https://raw.githubusercontent.com/ultysim/Insight-Project/master/media/mixtureparam.png)
 
 Mixture model:
 
-![Mixture Model](https://github.com/ultysim/Insight-Project/blob/master/media/mixturemodel.png)
+![Mixture Model](https://raw.githubusercontent.com/ultysim/Insight-Project/master/media/mixturemodel.png)
 =======
 I choose Atari Pong as the environment for this experiment as it is the only two player game in the Open Ai gym suite. An example of the expert agent in action:
 
