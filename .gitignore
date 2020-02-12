@@ -1,0 +1,24 @@
+
+.ipynb_checkpoints/Algorithms-checkpoint.ipynb
+.ipynb_checkpoints/Coding Interviews-checkpoint.ipynb
+.ipynb_checkpoints/Implementation Example-checkpoint.ipynb
+.ipynb_checkpoints/TF_lecture-checkpoint.ipynb
+build/lib/MixtureModelPong/__init__.py
+build/lib/MixtureModelPong/agent.py
+build/lib/MixtureModelPong/generatemetrics.py
+build/lib/MixtureModelPong/mixturemodel.py
+build/lib/MixtureModelPong/train_expert.py
+build/lib/MixtureModelPong/utils.py
+build/lib/src/__init__.py
+build/lib/src/agent.py
+build/lib/src/generatemetrics.py
+build/lib/src/mixturemodel.py
+build/lib/src/train_expert.py
+build/lib/src/utils.py
+Coding Interviews.ipynb
+dist/MixtureModelPong-0.0.0-py3.7.egg
+Many Experiments - History/dqn-pytorch/
+MixtureModelPong.egg-info/dependency_links.txt
+MixtureModelPong.egg-info/PKG-INFO
+MixtureModelPong.egg-info/SOURCES.txt
+MixtureModelPong.egg-info/top_level.txt
