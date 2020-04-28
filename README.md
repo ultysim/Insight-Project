@@ -1,4 +1,4 @@
-# Insight-Project
+# Competitive-AI
 Reinforcement learning project for Insight AI fellowship, completed in 4 weeks from project research and ideation to experimentation and completed product.
 
 Example experiment can be seen in Implementation Example.ipynb.
